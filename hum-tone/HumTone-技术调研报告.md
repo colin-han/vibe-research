@@ -19,6 +19,8 @@
 7. [许可证与商业化注意](#7-许可证与商业化注意)
 8. [重要限制与开放问题](#8-重要限制与开放问题)
 9. [引用来源](#9-引用来源)
+10. [附录 A：商业 SaaS API 兜底方案（⏳ 未实时验证）](#附录-a商业-saas-api-兜底方案-未实时验证)
+11. [附录 B：移动端低延迟实时音高检测（⏳ 未实时验证）](#附录-b移动端低延迟实时音高检测-未实时验证)
 
 ---
 
@@ -227,4 +229,50 @@ audio = pm.fluidsynth()   # ← 真实乐器音色，不是 synthesize()
 
 ---
 
-*报告由 deep-research 工作流生成（102 个子代理 / 多轮对抗式验证）。存在性结论高置信，性能/质量结论待后续验证补强。*
+## 附录 A：商业 SaaS API 兜底方案（⏳ 未实时验证）
+
+> ⚠️ 本节为补充调研。WebSearch 在本次补调研期间余额耗尽（HTTP 429），下列内容基于既有领域知识，**未做主源实时核实**，准确性需后续联网验证后再用于决策。
+
+主流生态里**没有**一个专门的「哼唱→MIDI」商业 API；现实做法是「云端托管开源模型」或「桌面软件」。可选方向：
+
+| 类型 | 方案 | 说明（待核实） |
+|---|---|---|
+| **云端模型推理平台** | **Replicate**、**Hugging Face Inference Endpoints / Spaces** | 最现实的"完全不自部署"路径：把 Basic Pitch / DDSP / RAVE 部署到云端，按次/按量付费调 API。无需自己管 GPU |
+| **音乐工具 SaaS** | **Moises**、**BandLab** | AI 音乐工具，偏分轨/DAW，旋律识别能力需核实是否有开放 API |
+| **桌面软件（非 API）** | **AnthemScore**、**Melody Scanner** | 音频→乐谱/MIDI，桌面端，非云端 API |
+| **音频 AI API（偏 TTS）** | AudioStack / Aflorithmic、ElevenLabs | 主要是语音合成，**不适合**乐器音色转换，仅作排查记录 |
+
+**结论**：如果目标是「完全不跑模型」，最靠谱的是用 **Replicate / Hugging Face** 把已有的开源模型（Basic Pitch、DDSP）包成 HTTP API 调用——本质还是路线 1/2 的模型，只是托管外包。**没有现成的开箱哼唱→乐器一站式商业 API**（待联网核实是否 2026 年有新产品）。
+
+---
+
+## 附录 B：移动端低延迟实时音高检测（⏳ 未实时验证）
+
+> ⚠️ 同上，本节为领域知识补充，**未做主源实时核实**，仅供方向参考。
+
+桌面 Python 库（CREPE/pYIN/Basic Pitch）是 CPU/服务端导向，**不适合**移动端实时。移动端方案：
+
+### B.1 模型方案（端侧推理）
+| 模型 | 适合移动端 | 备注（待核实） |
+|---|---|---|
+| **SPICE**（Google） | ✅ 推荐 | 比 CREPE 轻量，TF Hub 提供 SavedModel，可转 TFLite / CoreML；适合移动 |
+| **CREPE tiny/full** | ⚠️ 可行但较重 | 有 tiny 变体；CNN，转 CoreML/TFLite 可行，延迟与体积是关注点 |
+| **Basic Pitch** | ⚠️ 转换工作量 | 官方主推 TFLite；iOS 需 TFLite→ONNX→CoreML 转换，且要**自己在 Swift 里复刻 log-mel 预处理 + onset/frame 后处理**，工程量不小 |
+
+### B.2 经典 DSP 方案（延迟最优）
+对于**单音哼唱**，经典算法在延迟和精度上往往**优于** ML，且无需模型：
+- **TarsosDSP**（Java，Android 友好）、**aubio**、bitstream ACF、YIN/pYIN 的纯算法实现
+- 帧大小 ~1024–2048 样本（≈23–46 ms @44.1kHz），重叠相加 / 流式推理即可逼近 <50ms
+
+### B.3 runtime 与加速
+- iOS：**CoreML**（+ Neural Engine）
+- Android：**TFLite** + NNAPI/GPU delegate
+- 模型 **INT8 量化**降低推理时间
+- 通用跨平台：**ONNX Runtime Mobile**
+
+### B.4 建议
+MVP 先用**经典 DSP（TarsosDSP/YIN 类）**做移动端实时音高检测（延迟低、无模型依赖、单音够用），音色仍走 SoundFont 合成；待需要更高鲁棒性再换 SPICE 端侧模型。实时 <50ms 是本项目**核心技术难点**，需专项攻关。
+
+---
+
+*报告主体由 deep-research 工作流生成（102 个子代理 / 多轮对抗式验证）。附录 A/B 因搜索服务余额耗尽未做实时联网验证，为领域知识补充，使用前需联网核实。*
