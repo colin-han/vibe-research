@@ -76,7 +76,9 @@
 |---|---|---|---|
 | **Spotify Basic Pitch** | Apache-2.0 | 🟢 高 | 给一段音频直接吐出**带 pitch bend 的 MIDI 文件**。CLI：`basic-pitch <output> <input>`。正好替代「检测音高 → 切音符 → 生成 MIDI」整段，对单音（含哼唱）友好 |
 
-> ⚠️ **被验证驳回的论点**：原本期望 Basic Pitch 自带全平台端侧推理 runtime（CoreML/TFLite/ONNX），对抗式投票**驳回**了该说法。**不要假设有开箱即用的移动端部署方案**——端侧部署需要你自己做模型格式转换与原生集成（社区有 TFLite/CoreML 转换报告，但本轮未被主源验证）。
+> ✅ **主源确认（2026-06-25 复核）**：Basic Pitch **自带**全平台推理 runtime——官方 README 原文：「Basic Pitch comes with the original TensorFlow model and the TensorFlow model converted to **CoreML**, **TensorFlowLite**, and **ONNX**.」默认 macOS 装 CoreML、Linux 装 TFLite、Windows 装 ONNX，可用 `--model-serialization` 切换。
+>
+> ⚠️ **更正前版误判**：首轮 deep-research 因 WebSearch 限流、未能抓取 README 原文，对抗式投票曾「驳回」「Basic Pitch 自带多平台 runtime」这条。本次直接抓取主源后**推翻该驳回**——论点成立。移动端集成仍需在原生层自行实现音频预处理（log-mel）与 onset/frame 后处理，但**模型格式转换这一步官方已完成**。
 
 ### 3.3 MIDI 生成与编排
 
@@ -231,24 +233,27 @@ audio = pm.fluidsynth()   # ← 真实乐器音色，不是 synthesize()
 
 ## 附录 A：商业 SaaS API 兜底方案（⏳ 未实时验证）
 
-> ⚠️ 本节为补充调研。WebSearch 在本次补调研期间余额耗尽（HTTP 429），下列内容基于既有领域知识，**未做主源实时核实**，准确性需后续联网验证后再用于决策。
+> 🔬 **2026-06-25 主源复核（curl 直连）**：结论比初版更保守——
+> - **Replicate**：域名可达，但 `spotify/basic-pitch`、`replicate/basic-pitch` 等常见 slug **全部 404**，未找到官方/常见 basic-pitch 托管模型（可能存在社区 fork，需逐个核实 owner）。
+> - **Hugging Face**：当前网络环境 `huggingface.co` **不可达**（HTTP 000），无法核实托管情况。
+> - 因此「云端托管开源模型」这条路**目前缺乏已证实的开箱方案**，比初版暗示的更不确定。可信兜底仍是「自托管」（自己的服务器/GPU 上跑 Basic Pitch、DDSP），而非调第三方现成 API。
 
 主流生态里**没有**一个专门的「哼唱→MIDI」商业 API；现实做法是「云端托管开源模型」或「桌面软件」。可选方向：
 
 | 类型 | 方案 | 说明（待核实） |
 |---|---|---|
-| **云端模型推理平台** | **Replicate**、**Hugging Face Inference Endpoints / Spaces** | 最现实的"完全不自部署"路径：把 Basic Pitch / DDSP / RAVE 部署到云端，按次/按量付费调 API。无需自己管 GPU |
+| **云端模型推理平台** | **Replicate**、**Hugging Face** | 初版推测的"最现实不自部署"路径——但 2026-06-25 主源探测：Replicate 上未找到 basic-pitch 官方托管（常见 slug 404），HF 不可达。**现成方案未证实，多为自托管** |
 | **音乐工具 SaaS** | **Moises**、**BandLab** | AI 音乐工具，偏分轨/DAW，旋律识别能力需核实是否有开放 API |
 | **桌面软件（非 API）** | **AnthemScore**、**Melody Scanner** | 音频→乐谱/MIDI，桌面端，非云端 API |
 | **音频 AI API（偏 TTS）** | AudioStack / Aflorithmic、ElevenLabs | 主要是语音合成，**不适合**乐器音色转换，仅作排查记录 |
 
-**结论**：如果目标是「完全不跑模型」，最靠谱的是用 **Replicate / Hugging Face** 把已有的开源模型（Basic Pitch、DDSP）包成 HTTP API 调用——本质还是路线 1/2 的模型，只是托管外包。**没有现成的开箱哼唱→乐器一站式商业 API**（待联网核实是否 2026 年有新产品）。
+**结论（已复核修正）**：**没有现成的开箱哼唱→乐器一站式商业 API**。且本次主源探测未在 Replicate 找到 basic-pitch 托管、HF 不可达——「云端托管」目前缺乏已证实的现成方案。可行的兜底是**自托管**（自己的 GPU/服务器跑 Basic Pitch、DDSP，再包一层 HTTP）。若你已知某个确实可用的第三方 API，告诉我 slug 我直接核验。
 
 ---
 
 ## 附录 B：移动端低延迟实时音高检测（⏳ 未实时验证）
 
-> ⚠️ 同上，本节为领域知识补充，**未做主源实时核实**，仅供方向参考。
+> ✅ **2026-06-25 主源复核**：通过直接抓取主源（curl，绕过欠费的搜索后端）已核实——TarsosDSP（纯 Java、YIN/MPM/Wavelet、2.0 起官方支持 Android）、CREPE（tiny/small/medium/large/full 五档容量）、SPICE（Google 官方模型，Kaggle Models `google/spice` 存在）、Basic Pitch（自带 CoreML/TFLite/ONNX）。仅"实时延迟数值"等性能指标仍未实测。
 
 桌面 Python 库（CREPE/pYIN/Basic Pitch）是 CPU/服务端导向，**不适合**移动端实时。移动端方案：
 
@@ -256,8 +261,8 @@ audio = pm.fluidsynth()   # ← 真实乐器音色，不是 synthesize()
 | 模型 | 适合移动端 | 备注（待核实） |
 |---|---|---|
 | **SPICE**（Google） | ✅ 推荐 | 比 CREPE 轻量，TF Hub 提供 SavedModel，可转 TFLite / CoreML；适合移动 |
-| **CREPE tiny/full** | ⚠️ 可行但较重 | 有 tiny 变体；CNN，转 CoreML/TFLite 可行，延迟与体积是关注点 |
-| **Basic Pitch** | ⚠️ 转换工作量 | 官方主推 TFLite；iOS 需 TFLite→ONNX→CoreML 转换，且要**自己在 Swift 里复刻 log-mel 预处理 + onset/frame 后处理**，工程量不小 |
+| **CREPE** | ⚠️ 可行但较重 | 主源确认有 **tiny/small/medium/large/full 五档**容量（tiny 最快、精度略降）；CNN，可转 CoreML/TFLite，延迟与体积是关注点 |
+| **Basic Pitch** | ✅ 自带多 runtime | 主源确认官方已转出 **CoreML / TFLite / ONNX**（无需自己做模型格式转换）；但 iOS/Android 侧仍需自行实现 log-mel 音频预处理与 onset/frame→MIDI 后处理 |
 
 ### B.2 经典 DSP 方案（延迟最优）
 对于**单音哼唱**，经典算法在延迟和精度上往往**优于** ML，且无需模型：
@@ -275,4 +280,4 @@ MVP 先用**经典 DSP（TarsosDSP/YIN 类）**做移动端实时音高检测（
 
 ---
 
-*报告主体由 deep-research 工作流生成（102 个子代理 / 多轮对抗式验证）。附录 A/B 因搜索服务余额耗尽未做实时联网验证，为领域知识补充，使用前需联网核实。*
+*报告主体由 deep-research 工作流生成（102 个子代理 / 多轮对抗式验证）。附录 A/B 于 2026-06-25 用 curl 直连主源（GitHub raw / Replicate / Kaggle）二次复核，搜索服务余额耗尽期间绕过其后端：附录 B 多数结论已主源确认并升级置信度，附录 A 的 SaaS 托管说法因未找到现成方案而下修。性能/延迟数值仍未实测。*
